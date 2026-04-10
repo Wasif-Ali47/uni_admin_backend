@@ -35,6 +35,11 @@ const userSchema = new mongoose.Schema({
     resetOTP: {
         type: String,
     },
+    /** When false, this user's generations are hidden from trending and cannot be liked by others. */
+    creationsPublic: {
+        type: Boolean,
+        default: true,
+    },
 }, { timestamps: true });
 
 const User = mongoose.model("User", userSchema);

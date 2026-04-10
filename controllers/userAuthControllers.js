@@ -246,6 +246,15 @@ async function handleUpdateProfile(req, res) {
       updates.image = `/uploads/profile/${req.file.filename}`;
     }
 
+    const cp = req.body.creationsPublic;
+    if (cp !== undefined && cp !== null && cp !== "") {
+      if (cp === true || cp === "true" || cp === "1") {
+        updates.creationsPublic = true;
+      } else if (cp === false || cp === "false" || cp === "0") {
+        updates.creationsPublic = false;
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ message: "No data to update" });
     }

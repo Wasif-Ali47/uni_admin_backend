@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const OpenAI = require("openai");
 const GeneratedImage = require("../models/generatedImageModel");
 const ImageLike = require("../models/likeModel");
+const User = require("../models/usersModel");
 const {
   saveRemoteImageToUserGenerations,
   saveRemoteGuestImage,
@@ -336,20 +337,45 @@ async function handleListMyImages(req, res) {
   }
 }
 
-async function handleTrending(req, res) {
-  const limit = Math.min(
-    Math.max(parseInt(req.query.limit, 10) || 20, 1),
-    50
-  );
-  const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
+const TRENDING_POOL_MAX = 50;
+const TRENDING_SAMPLE_SIZE = 10;
 
+async function handleTrending(req, res) {
   try {
-    const rows = await GeneratedImage.find()
-      .sort({ likesCount: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("userId", "name")
-      .lean();
+    const pipeline = [
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "author",
+        },
+      },
+      {
+        $match: {
+          $or: [
+            { author: { $size: 0 } },
+            { "author.0.creationsPublic": { $ne: false } },
+          ],
+        },
+      },
+      { $sort: { likesCount: -1, createdAt: -1 } },
+      { $limit: TRENDING_POOL_MAX },
+      { $sample: { size: TRENDING_SAMPLE_SIZE } },
+      {
+        $project: {
+          prompt: 1,
+          revisedPrompt: 1,
+          imageUrl: 1,
+          likesCount: 1,
+          createdAt: 1,
+          authorName: { $arrayElemAt: ["$author.name", 0] },
+          authorId: { $arrayElemAt: ["$author._id", 0] },
+        },
+      },
+    ];
+
+    const rows = await GeneratedImage.aggregate(pipeline);
 
     const ids = rows.map((r) => r._id);
     let likedSet = new Set();
@@ -371,15 +397,21 @@ async function handleTrending(req, res) {
       imageUrl: row.imageUrl,
       likesCount: row.likesCount ?? 0,
       createdAt: row.createdAt,
-      author: row.userId
-        ? { name: row.userId.name, id: row.userId._id }
-        : null,
+      author:
+        row.authorName != null
+          ? { name: row.authorName, id: row.authorId }
+          : null,
       likedByMe: req.user?._id
         ? likedSet.has(String(row._id))
         : false,
     }));
 
-    return res.json({ items, limit, skip });
+    return res.json({
+      items,
+      limit: TRENDING_SAMPLE_SIZE,
+      skip: 0,
+      poolMax: TRENDING_POOL_MAX,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: NETWORK_ERROR });
@@ -398,6 +430,19 @@ async function handleToggleLike(req, res) {
     const image = await GeneratedImage.findById(id);
     if (!image) {
       return res.status(404).json({ error: IMAGE_NOT_FOUND });
+    }
+
+    const ownerId = image.userId?.toString?.() ?? String(image.userId);
+    const likerId = userId?.toString?.() ?? String(userId);
+    if (ownerId !== likerId) {
+      const owner = await User.findById(image.userId)
+        .select("creationsPublic")
+        .lean();
+      if (owner && owner.creationsPublic === false) {
+        return res.status(403).json({
+          error: "This creation is private",
+        });
+      }
     }
 
     const removed = await ImageLike.findOneAndDelete({
