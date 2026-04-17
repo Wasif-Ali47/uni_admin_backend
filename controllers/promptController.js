@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const OpenAI = require("openai");
 const PromptGeneration = require("../models/promptGenerationModel");
+const User = require("../models/usersModel");
 const { getUser } = require("../services/userAuthService");
 const { NETWORK_ERROR, INPUT_REQUIRED, INVALID_ID, NOT_FOUND } = require("../messages/message");
 
@@ -26,19 +27,35 @@ function buildUserMessage(body) {
   return `Idea:\n${input}\n\nExtra context or constraints:\n${extra}`;
 }
 
-function resolveAuthContext(req) {
+async function resolveAuthContext(req) {
+  if (req.authUser?._id) {
+    return {
+      userId: req.authUser._id.toString(),
+      email: req.authUser.email ? req.authUser.email.toString().trim().toLowerCase() : null,
+      isBanned: !!req.authUser.isBanned,
+      user: req.authUser,
+    };
+  }
+
   const raw = req.headers.authorization || "";
-  if (!raw.startsWith("Bearer ")) return { userId: null, email: null };
+  if (!raw.startsWith("Bearer ")) return { userId: null, email: null, isBanned: false, user: null };
   const token = raw.replace("Bearer ", "").trim();
-  if (!token) return { userId: null, email: null };
+  if (!token) return { userId: null, email: null, isBanned: false, user: null };
   try {
     const decoded = getUser(token);
+    const user = decoded?._id ? await User.findById(decoded._id) : null;
     return {
-      userId: decoded?._id ? decoded._id.toString() : null,
-      email: decoded?.email ? decoded.email.toString().trim().toLowerCase() : null,
+      userId: user?._id ? user._id.toString() : decoded?._id ? decoded._id.toString() : null,
+      email: user?.email
+        ? user.email.toString().trim().toLowerCase()
+        : decoded?.email
+        ? decoded.email.toString().trim().toLowerCase()
+        : null,
+      isBanned: !!user?.isBanned,
+      user,
     };
   } catch (_) {
-    return { userId: null, email: null };
+    return { userId: null, email: null, isBanned: false, user: null };
   }
 }
 
@@ -46,6 +63,13 @@ async function handleGeneratePrompt(req, res) {
   const userContent = buildUserMessage(req.body);
   if (!userContent) {
     return res.status(400).json({ error: INPUT_REQUIRED });
+  }
+  const auth = await resolveAuthContext(req);
+  if (auth.isBanned) {
+    return res.status(403).json({
+      error: "Your account is banned. Prompt generation is disabled.",
+      bannedReason: auth.user?.bannedReason || "",
+    });
   }
 
   const model = (process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
@@ -58,6 +82,7 @@ async function handleGeneratePrompt(req, res) {
   }
 
   let generatedPrompt;
+  let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   try {
     const completion = await client.chat.completions.create({
       model,
@@ -68,6 +93,11 @@ async function handleGeneratePrompt(req, res) {
       temperature: 0.7,
     });
     generatedPrompt = completion.choices?.[0]?.message?.content?.trim() || "";
+    usage = {
+      promptTokens: Number(completion?.usage?.prompt_tokens) || 0,
+      completionTokens: Number(completion?.usage?.completion_tokens) || 0,
+      totalTokens: Number(completion?.usage?.total_tokens) || 0,
+    };
   } catch (err) {
     const msg =
       err?.response?.data?.error?.message ||
@@ -83,20 +113,43 @@ async function handleGeneratePrompt(req, res) {
   }
 
   try {
-    const auth = resolveAuthContext(req);
     const doc = await PromptGeneration.create({
       userId: auth.userId,
       generatedBy: auth.email || "",
       input: typeof req.body.input === "string" ? req.body.input.trim() : userContent,
       generatedPrompt,
       model,
+      usage,
     });
+
+    if (auth.userId) {
+      try {
+        await User.updateOne(
+          { _id: auth.userId },
+          {
+            $inc: {
+              "openAiUsage.promptTokens": usage.promptTokens,
+              "openAiUsage.completionTokens": usage.completionTokens,
+              "openAiUsage.totalTokens": usage.totalTokens,
+              "openAiUsage.requestCount": 1,
+            },
+            $set: {
+              "openAiUsage.lastUsedAt": new Date(),
+            },
+          }
+        );
+      } catch (usageErr) {
+        console.error("[prompt usage update] failed:", usageErr.message);
+      }
+    }
+
     return res.status(201).json({
       id: doc._id,
       generatedBy: doc.generatedBy,
       input: doc.input,
       generatedPrompt: doc.generatedPrompt,
       model: doc.model,
+      usage: doc.usage,
       createdAt: doc.createdAt,
     });
   } catch (err) {

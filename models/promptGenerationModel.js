@@ -17,6 +17,11 @@ const promptGenerationSchema = new mongoose.Schema(
     input: { type: String, required: true, trim: true },
     generatedPrompt: { type: String, required: true, trim: true },
     model: { type: String, default: "" },
+    usage: {
+      promptTokens: { type: Number, default: 0 },
+      completionTokens: { type: Number, default: 0 },
+      totalTokens: { type: Number, default: 0 },
+    },
   },
   { timestamps: true }
 );

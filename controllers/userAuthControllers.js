@@ -106,6 +106,12 @@ async function handleUserLogin(req, res) {
 
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ error: USER_NOT_FOUND });
+    if (user.isBanned) {
+      return res.status(403).json({
+        error: "Your account is banned. Please contact support.",
+        bannedReason: user.bannedReason || "",
+      });
+    }
 
     if (user.emailVerified === false) {
       return res.status(400).json({ error: EMAIL_NOT_VERIFIED });
@@ -174,6 +180,13 @@ async function handleGoogleLogin(req, res) {
         updated = true;
       }
       if (updated) await user.save();
+    }
+
+    if (user.isBanned) {
+      return res.status(403).json({
+        error: "Your account is banned. Please contact support.",
+        bannedReason: user.bannedReason || "",
+      });
     }
 
     const token = setUser(user);

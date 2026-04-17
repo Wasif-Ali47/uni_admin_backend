@@ -4,11 +4,11 @@ const {
   handleListPrompts,
   handleGetPrompt,
 } = require("../controllers/promptController");
-const { authenticate } = require("../middlewares/authMiddleware");
+const { authenticate, optionalAuth } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
-router.post("/generate", handleGeneratePrompt);
+router.post("/generate", optionalAuth, handleGeneratePrompt);
 router.get("/", authenticate, handleListPrompts);
 router.get("/:id", authenticate, handleGetPrompt);
 
