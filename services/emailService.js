@@ -9,6 +9,7 @@ async function sendOTPEmail(email, otp) {
     );
     return;
   }
+  // jj
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
