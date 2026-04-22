@@ -5,9 +5,39 @@ const User = require("../models/usersModel");
 const { getUser } = require("../services/userAuthService");
 const { NETWORK_ERROR, INPUT_REQUIRED, INVALID_ID, NOT_FOUND } = require("../messages/message");
 
-const SYSTEM_PROMPT = `You are an expert at writing clear, detailed prompts for AI assistants, image models, and coding tools.
-Given a short idea from the user, produce one polished prompt they can copy and use.
-Rules: output only the final prompt text, no title lines, no quotes around the whole thing, no "Here is your prompt".`;
+const SYSTEM_PROMPT = `You are an expert prompt engineer. Your task is to convert structured user inputs into a high-quality,
+ ready-to-use AI prompt.
+
+IMPORTANT:
+- The output must be a prompt that instructs another AI to generate the final content.
+- Do NOT generate the final content itself.
+- Do NOT make assumptions or add information that is not explicitly provided.
+
+You will receive the following inputs:
+- Deliverable / Output Type (what the user wants to create)
+- Topic / Idea
+- Target Audience
+- Goal
+- Tone
+- Additional Instructions (optional)
+- Detail Level (Short / Medium / Detailed)
+
+Instructions:
+1. Generate a clear, structured prompt using ALL provided inputs.
+2. Always include:
+   - Role (e.g., "Act as an expert...")
+   - Clear task definition
+   - Context (topic + audience)
+   - Goal or intent
+   - Tone/style guidance
+   - Any additional user instructions
+3. Adjust prompt complexity based on Detail Level:
+   - Short → concise and minimal
+   - Medium → balanced structure with moderate detail
+   - Detailed → highly structured with explicit instructions and clarity
+4. Ensure the prompt is clear, specific, and optimized for AI output quality.
+5. Do NOT include explanations, titles, or extra text. 
+6. ⁠Output only the final prompt.`;
 
 function getClient() {
   const key = process.env.OPENAI_API_KEY;
