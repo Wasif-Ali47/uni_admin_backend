@@ -12,6 +12,7 @@ const notificationRouter = require("./routes/notificationRoutes");
 const appPromoRouter = require("./routes/appPromoRoutes");
 const adminPromoRouter = require("./routes/adminPromoRoutes");
 const chatRouter = require("./routes/chatRoutes");
+const appRegistryRouter = require("./routes/appRegistryRoutes");
 const { ensureFirebaseAdmin } = require("./utils/firebaseAdminInit");
 
 const mongoUri = process.env.MONGODB_URI;
@@ -23,7 +24,7 @@ if (!mongoUri) {
 const app = express();
 const port = Number(process.env.PORT) || 8000;
 const defaultAllowedOrigins = [
-  "https://adminofwifianalyzer.oxmite.com"
+  "http://localhost:3000"
 ];
 const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean)
@@ -66,7 +67,8 @@ app.use((req, res, next) => {
 
 app.get("/", (req, res) => {
   res.json({
-    service: "AI Wifi Analyzer",
+    service: "Universal Admin Backend",
+    description: "Central hub for FCM notifications, promos, and multi-app admin. User auth and AI features are handled by separate app backends.",
     endpoints: {
       auth: {
         signup: "POST /auth/signup",
@@ -105,10 +107,20 @@ app.get("/", (req, res) => {
         users: "GET /api/admin/users",
         usage: "GET /api/admin/usage",
         banUser: "PATCH /api/admin/users/:id/ban",
-        broadcastNotification: "POST /api/admin/notifications/broadcast",
+        broadcastNotification: "POST /api/admin/notifications/broadcast (appSlug optional)",
         createPromo: "POST /api/admin/app-promos",
         updatePromo: "PUT/PATCH /api/admin/app-promos/:id",
         deletePromo: "DELETE /api/admin/app-promos/:id",
+      },
+      appRegistry: {
+        list: "GET /api/admin/apps",
+        create: "POST /api/admin/apps",
+        update: "PUT /api/admin/apps/:id",
+        delete: "DELETE /api/admin/apps/:id",
+        allAppsOverview: "GET /api/admin/apps/overview/all",
+        appUsers: "GET /api/admin/apps/:slug/users",
+        appUsage: "GET /api/admin/apps/:slug/usage",
+        appBanUser: "PATCH /api/admin/apps/:slug/users/:userId/ban",
       },
     },
   });
@@ -121,6 +133,7 @@ app.use("/api/app-promos", appPromoRouter);
 app.use("/api/admin/auth", adminAuthRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/admin/app-promos", adminPromoRouter);
+app.use("/api/admin/apps", appRegistryRouter);
 app.use("/api/chat", chatRouter);
 // gsddhh
 app.use((req, res) => {

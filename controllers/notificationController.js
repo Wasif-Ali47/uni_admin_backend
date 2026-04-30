@@ -13,7 +13,7 @@ function buildDeviceInfo(deviceInfo) {
   };
 }
 
-async function upsertStandaloneToken({ token, labelUserId, deviceType, deviceInfo }) {
+async function upsertStandaloneToken({ token, labelUserId, deviceType, deviceInfo, appSlug }) {
   await PushDeviceToken.findOneAndUpdate(
     { token },
     {
@@ -22,6 +22,7 @@ async function upsertStandaloneToken({ token, labelUserId, deviceType, deviceInf
         userId: labelUserId || null,
         deviceType,
         deviceInfo,
+        appSlug: appSlug || "default",
         isActive: true,
         registeredAt: new Date(),
       },
@@ -43,11 +44,25 @@ async function registerToken(req, res) {
     const deviceType = typeof req.body?.deviceType === "string" ? req.body.deviceType.trim() : "unknown";
     const deviceInfo = buildDeviceInfo(req.body?.deviceInfo);
     const bodyUserIdRaw = typeof req.body?.userId === "string" ? req.body.userId.trim() : "";
+    const appSlug = typeof req.body?.appSlug === "string" ? req.body.appSlug.trim() : "default";
 
     if (!token) {
       return res.status(400).json({
         success: false,
         message: "token is required",
+      });
+    }
+
+    // Cross-app registration: when appSlug is explicitly provided the user belongs to
+    // a separate backend — skip local user lookup and store directly as standalone token.
+    if (appSlug && appSlug !== "default") {
+      await upsertStandaloneToken({ token, labelUserId: bodyUserIdRaw || null, deviceType, deviceInfo, appSlug });
+      return res.status(201).json({
+        success: true,
+        message: "Device token registered successfully",
+        storage: "standalone",
+        appSlug,
+        token,
       });
     }
 
@@ -109,6 +124,7 @@ async function registerToken(req, res) {
       labelUserId: bodyUserIdRaw || null,
       deviceType,
       deviceInfo,
+      appSlug,
     });
 
     return res.status(201).json({

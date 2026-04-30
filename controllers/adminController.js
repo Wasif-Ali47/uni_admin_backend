@@ -222,6 +222,10 @@ async function broadcastNotification(req, res) {
     const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
     const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
     const data = req.body?.data && typeof req.body.data === "object" ? req.body.data : {};
+    // Optional: filter by appSlug. Pass "all" or omit to broadcast to everything.
+    const appSlugFilter = typeof req.body?.appSlug === "string" && req.body.appSlug !== "all"
+      ? req.body.appSlug.trim()
+      : null;
 
     if (!title || !body) {
       return res.status(400).json({
@@ -244,7 +248,10 @@ async function broadcastNotification(req, res) {
       }
     }
 
-    const standaloneRows = await PushDeviceToken.find({ isActive: true }).select("token").lean();
+    const standaloneQuery = { isActive: true };
+    if (appSlugFilter) standaloneQuery.appSlug = appSlugFilter;
+
+    const standaloneRows = await PushDeviceToken.find(standaloneQuery).select("token").lean();
     for (const row of standaloneRows) {
       if (row?.token) {
         uniqueTokens.add(row.token);

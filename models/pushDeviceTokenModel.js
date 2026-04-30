@@ -21,6 +21,12 @@ const pushDeviceTokenSchema = new mongoose.Schema(
     },
     deviceType: { type: String, default: "unknown", trim: true },
     deviceInfo: { type: mongoose.Schema.Types.Mixed, default: {} },
+    appSlug: {
+      type: String,
+      default: "default",
+      trim: true,
+      index: true,
+    },
     isActive: { type: Boolean, default: true },
     registeredAt: { type: Date, default: Date.now },
   },
