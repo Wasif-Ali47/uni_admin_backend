@@ -12,7 +12,7 @@ const appRegistrySchema = new mongoose.Schema(
       match: /^[a-z0-9-]+$/,
     },
     hasBackend: { type: Boolean, default: true },
-    packageName: { type: String, default: "", trim: true },
+    packageName: { type: String, required: true, trim: true },
     baseUrl: { type: String, default: "", trim: true },
     serviceKey: { type: String, default: "", trim: true },
     isActive: { type: Boolean, default: true },

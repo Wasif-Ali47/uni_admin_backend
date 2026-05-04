@@ -13,8 +13,8 @@ async function listApps(req, res) {
 async function createApp(req, res) {
   try {
     const { name, slug, hasBackend = true, packageName, baseUrl, serviceKey, color, description } = req.body;
-    if (!name || !slug) {
-      return res.status(400).json({ success: false, message: "name and slug are required" });
+    if (!name || !slug || !packageName) {
+      return res.status(400).json({ success: false, message: "name, slug, and packageName are required" });
     }
     if (hasBackend && (!baseUrl || !serviceKey)) {
       return res.status(400).json({ success: false, message: "baseUrl and serviceKey are required for apps with a backend" });

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const User = require("../models/usersModel");
 const PushDeviceToken = require("../models/pushDeviceTokenModel");
+const AppRegistry = require("../models/appRegistryModel");
 const { ensureFirebaseAdmin } = require("../utils/firebaseAdminInit");
 
 async function getUsers(req, res) {
@@ -234,22 +235,29 @@ async function broadcastNotification(req, res) {
       });
     }
 
-    const usersWithTokens = await User.find({
-      "deviceTokens.0": { $exists: true },
-      isBanned: { $ne: true },
-    }).select("deviceTokens");
-
+    // User.deviceTokens have no appSlug — they belong to apps with their own backend.
+    // Only include them when broadcasting to all apps, not to a specific app.
     const uniqueTokens = new Set();
-    for (const user of usersWithTokens) {
-      for (const device of user.deviceTokens || []) {
-        if (device?.token) {
-          uniqueTokens.add(device.token);
+    if (!appSlugFilter) {
+      const usersWithTokens = await User.find({
+        "deviceTokens.0": { $exists: true },
+        isBanned: { $ne: true },
+      }).select("deviceTokens");
+
+      for (const user of usersWithTokens) {
+        for (const device of user.deviceTokens || []) {
+          if (device?.token) uniqueTokens.add(device.token);
         }
       }
     }
 
+    // Tokens are registered by Flutter apps using their packageName as appSlug.
+    // Resolve the selected app's packageName from AppRegistry and filter by that.
     const standaloneQuery = { isActive: true };
-    if (appSlugFilter) standaloneQuery.appSlug = appSlugFilter;
+    if (appSlugFilter) {
+      const appRecord = await AppRegistry.findOne({ slug: appSlugFilter }).lean();
+      standaloneQuery.appSlug = appRecord?.packageName || appSlugFilter;
+    }
 
     const standaloneRows = await PushDeviceToken.find(standaloneQuery).select("token").lean();
     for (const row of standaloneRows) {
