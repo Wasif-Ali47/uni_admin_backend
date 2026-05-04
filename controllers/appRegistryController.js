@@ -12,11 +12,14 @@ async function listApps(req, res) {
 
 async function createApp(req, res) {
   try {
-    const { name, slug, baseUrl, serviceKey, color, description } = req.body;
-    if (!name || !slug || !baseUrl || !serviceKey) {
-      return res.status(400).json({ success: false, message: "name, slug, baseUrl, and serviceKey are required" });
+    const { name, slug, hasBackend = true, packageName, baseUrl, serviceKey, color, description } = req.body;
+    if (!name || !slug) {
+      return res.status(400).json({ success: false, message: "name and slug are required" });
     }
-    const app = await AppRegistry.create({ name, slug, baseUrl, serviceKey, color, description });
+    if (hasBackend && (!baseUrl || !serviceKey)) {
+      return res.status(400).json({ success: false, message: "baseUrl and serviceKey are required for apps with a backend" });
+    }
+    const app = await AppRegistry.create({ name, slug, hasBackend, packageName, baseUrl, serviceKey, color, description });
     return res.status(201).json({ success: true, app });
   } catch (error) {
     if (error.code === 11000) {
@@ -30,7 +33,7 @@ async function createApp(req, res) {
 async function updateApp(req, res) {
   try {
     const { id } = req.params;
-    const allowed = ["name", "baseUrl", "serviceKey", "isActive", "color", "description"];
+    const allowed = ["name", "hasBackend", "packageName", "baseUrl", "serviceKey", "isActive", "color", "description"];
     const payload = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) payload[key] = req.body[key];
